@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import { View, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { GiftedChat, Send } from "react-native-gifted-chat";
 
-import Chatkit from "@pusher/chatkit";
+import { ChatManager, TokenProvider } from "@pusher/chatkit-client";
 
 import randomstring from "random-string";
 
@@ -74,14 +74,10 @@ export default class Chat extends Component {
 
     const username = navigation.getParam("username");
 
-    const tokenProvider = new Chatkit.TokenProvider({
-      url: CHATKIT_TOKEN_PROVIDER_ENDPOINT
-    });
-
-    const chatManager = new Chatkit.ChatManager({
+    const chatManager = new ChatManager({
       instanceLocator: CHATKIT_INSTANCE_LOCATOR,
       userId: this.user_id,
-      tokenProvider: tokenProvider
+      tokenProvider: new TokenProvider({ url: CHATKIT_TOKEN_PROVIDER_ENDPOINT })
     });
 
     try {
@@ -102,11 +98,11 @@ export default class Chat extends Component {
       if (response.ok) {
         let room = await response.json();
 
-        this.room_id = room.id;
+        this.room_id = room.id.toString();
         await this.currentUser.subscribeToRoom({
-          roomId: room.id,
+          roomId: this.room_id,
           hooks: {
-            onNewMessage: this.onReceive
+            onMessage: this.onReceive
           }
         });
 
@@ -127,17 +123,6 @@ export default class Chat extends Component {
     this.setState({
       is_modal_visible: true
     });
-  };
-
-  fetchAttachment = async link => {
-    let file = await this.currentUser.fetchAttachment({
-      url: link
-    });
-
-    return {
-      name: file.file.name,
-      link: file.link
-    };
   };
 
   onReceive = async data => {
@@ -191,7 +176,6 @@ export default class Chat extends Component {
           name: `${filename}`
         },
         name: `${filename}`,
-        fetchRequired: true,
         type: this.attachment.type
       };
     }
@@ -262,26 +246,23 @@ export default class Chat extends Component {
       user: {
         _id: senderId,
         name: senderId,
-        avatar:
-          "https://cdn.pixabay.com/photo/2016/08/08/09/17/avatar-1577909_960_720.png"
+        avatar: "https://png.pngtree.com/svg/20170602/0db185fb9c.png"
       }
     };
 
-    if (attachment && attachment.fetchRequired) {
-      const { link, type } = attachment;
-
-      let file = await this.fetchAttachment(attachment.link);
+    if (attachment) {
+      const { name, type, link } = attachment;
 
       if (type == "image") {
-        msg_data.image = file.link;
+        msg_data.image = link;
       } else {
-        msg_data.text += `\nattached:\n${file.name}`;
+        msg_data.text += `\nattached:\n${name}`;
       }
 
       file_data = {
         id: id,
-        name: file.name,
-        link: file.link,
+        name: name,
+        link: link,
         type: type
       };
     }
@@ -291,6 +272,7 @@ export default class Chat extends Component {
       file: file_data
     };
   };
+
 
   loadEarlierMessages = async () => {
     this.setState({
